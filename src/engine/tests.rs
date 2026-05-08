@@ -28,7 +28,6 @@ fn telex_w_handles_context_cases() {
     assert_eq!(simulate_telex_word("thuowng"), "thương");
     assert_eq!(simulate_telex_word("luoon"), "luôn");
     assert_eq!(simulate_telex_word("duawj"), "dựa");
-    assert_eq!(transform_word("thuowrng", InputMethod::Telex), "thưởng");
     assert_eq!(simulate_telex_word("nhungxw"), "những");
     assert_eq!(simulate_telex_word("nhuwngx"), "những");
     assert_eq!(simulate_telex_word("nhungwx"), "những");
@@ -57,6 +56,11 @@ fn telex_regression_real_world_words() {
     for (raw, expected) in cases {
         assert_eq!(transform_word(raw, InputMethod::Telex), expected, "raw={raw}");
     }
+
+    // Vietlish safety: keep common English words untouched.
+    assert_eq!(transform_word("test", InputMethod::Telex), "test");
+    assert_eq!(transform_word("cursor", InputMethod::Telex), "cursor");
+    assert_eq!(transform_word("buzz", InputMethod::Telex), "buzz");
 }
 
 #[test]

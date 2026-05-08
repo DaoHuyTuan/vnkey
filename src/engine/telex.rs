@@ -20,9 +20,16 @@ pub(crate) fn parse_telex_tone(chars: &mut Vec<char>) -> Tone {
             'r' => Tone::Hook,
             'x' => Tone::Tilde,
             'j' => Tone::Dot,
-            'z' => Tone::None,
             _ => continue,
         };
+        let suffix = &chars[idx + 1..];
+        let suffix_is_shape_tail = suffix.iter().all(|ch| matches!(ch.to_ascii_lowercase(), 'w' | 'a' | 'e' | 'o' | 'd'));
+        if !suffix.is_empty() && !suffix_is_shape_tail {
+            continue;
+        }
+        if suffix.is_empty() && vowel_cluster_count(&chars[..idx]) != 1 {
+            continue;
+        }
         if chars.iter().take(idx).any(|ch| is_vowel_or_marked(*ch)) {
             chars.remove(idx);
             return tone;
@@ -162,4 +169,20 @@ fn is_o_horn_or_marked(ch: char) -> bool {
 
 fn is_coda_consonant(ch: char) -> bool {
     ch.is_alphabetic() && !is_vowel_or_marked(ch)
+}
+
+fn vowel_cluster_count(chars: &[char]) -> usize {
+    let mut clusters = 0usize;
+    let mut in_cluster = false;
+    for &ch in chars {
+        if is_vowel_or_marked(ch) {
+            if !in_cluster {
+                clusters += 1;
+                in_cluster = true;
+            }
+        } else {
+            in_cluster = false;
+        }
+    }
+    clusters
 }
