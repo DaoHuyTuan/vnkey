@@ -24,8 +24,15 @@ pub(crate) fn parse_telex_tone(chars: &mut Vec<char>) -> Tone {
         };
         let suffix = &chars[idx + 1..];
         let suffix_is_shape_tail = suffix.iter().all(|ch| matches!(ch.to_ascii_lowercase(), 'w' | 'a' | 'e' | 'o' | 'd'));
-        if !suffix.is_empty() && !suffix_is_shape_tail {
-            continue;
+        let suffix_is_valid_coda = is_valid_vietnamese_coda(suffix);
+        let has_vietnamese_trigger = has_telex_vietnamese_trigger(&chars[..idx]);
+        if !suffix.is_empty() {
+            let suffix_has_w = suffix.iter().any(|ch| ch.eq_ignore_ascii_case(&'w'));
+            let allow_shape_tail = suffix_is_shape_tail && (has_vietnamese_trigger || suffix_has_w);
+            let allow_coda_tail = suffix_is_valid_coda && has_vietnamese_trigger;
+            if !(allow_shape_tail || allow_coda_tail) {
+                continue;
+            }
         }
         if suffix.is_empty() && vowel_cluster_count(&chars[..idx]) != 1 {
             continue;
@@ -185,4 +192,33 @@ fn vowel_cluster_count(chars: &[char]) -> usize {
         }
     }
     clusters
+}
+
+fn has_telex_vietnamese_trigger(chars: &[char]) -> bool {
+    for &ch in chars {
+        let base = strip_tone(ch);
+        if base != ch {
+            return true;
+        }
+    }
+    chars
+        .windows(2)
+        .any(|w| matches!(
+            (w[0].to_ascii_lowercase(), w[1].to_ascii_lowercase()),
+            ('a', 'a')
+                | ('a', 'w')
+                | ('e', 'e')
+                | ('o', 'o')
+                | ('o', 'w')
+                | ('u', 'w')
+                | ('d', 'd')
+        ))
+}
+
+fn is_valid_vietnamese_coda(suffix: &[char]) -> bool {
+    if suffix.is_empty() || suffix.iter().any(|ch| !ch.is_ascii_alphabetic()) {
+        return false;
+    }
+    let s: String = suffix.iter().map(|ch| ch.to_ascii_lowercase()).collect();
+    matches!(s.as_str(), "c" | "ch" | "m" | "n" | "ng" | "nh" | "p" | "t")
 }

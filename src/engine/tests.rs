@@ -59,6 +59,7 @@ fn telex_regression_real_world_words() {
 
     // Vietlish safety: keep common English words untouched.
     assert_eq!(transform_word("test", InputMethod::Telex), "test");
+    assert_eq!(transform_word("case", InputMethod::Telex), "case");
     assert_eq!(transform_word("cursor", InputMethod::Telex), "cursor");
     assert_eq!(transform_word("buzz", InputMethod::Telex), "buzz");
 }

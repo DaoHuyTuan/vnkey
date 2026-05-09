@@ -25,15 +25,21 @@ mod windows_app {
         DestroyMenu, DestroyWindow, DispatchMessageW, GetCursorPos, GetForegroundWindow,
         GetMessageW, GetWindowThreadProcessId, LoadIconW, PostQuitMessage, RegisterClassW,
         SetForegroundWindow, SetWindowsHookExW, TrackPopupMenu, TranslateMessage, UnhookWindowsHookEx,
-        HC_ACTION, HHOOK, HWND_MESSAGE, IDI_APPLICATION, KBDLLHOOKSTRUCT, MF_STRING, MSG,
+        HC_ACTION, HHOOK, HMENU, HWND_MESSAGE, IDI_APPLICATION, KBDLLHOOKSTRUCT, MF_STRING, MSG,
         TPM_RIGHTBUTTON, WH_KEYBOARD_LL, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_COMMAND,
         WM_CONTEXTMENU, WM_DESTROY, WM_KEYDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WNDCLASSW,
+        WS_CHILD, WS_OVERLAPPEDWINDOW, WS_VISIBLE, BS_AUTORADIOBUTTON, BM_SETCHECK, SendMessageW,
     };
 
     static STATE: Lazy<Mutex<AppState>> = Lazy::new(|| Mutex::new(AppState::default()));
     const WM_TRAYICON: u32 = WM_APP + 1;
     const TRAY_ICON_ID: u32 = 1;
+    const MENU_CONFIG_ID: usize = 1000;
     const MENU_EXIT_ID: usize = 1001;
+    const ID_RADIO_TELEX: usize = 2001;
+    const ID_RADIO_VNI: usize = 2002;
+    const ID_BTN_CLOSE: usize = 2003;
+    const ID_BTN_EXIT: usize = 2004;
 
     #[derive(Debug)]
     struct AppState {
@@ -129,8 +135,14 @@ mod windows_app {
                 LRESULT(0)
             }
             WM_COMMAND => {
-                if (wparam.0 & 0xffff) as usize == MENU_EXIT_ID {
-                    let _ = DestroyWindow(hwnd);
+                match (wparam.0 & 0xffff) as usize {
+                    MENU_CONFIG_ID => {
+                        show_config_window();
+                    }
+                    MENU_EXIT_ID => {
+                        let _ = DestroyWindow(hwnd);
+                    }
+                    _ => {}
                 }
                 LRESULT(0)
             }
@@ -147,7 +159,9 @@ mod windows_app {
             Ok(m) => m,
             Err(_) => return,
         };
+        let config_text = to_wide("Config");
         let exit_text = to_wide("Exit");
+        let _ = AppendMenuW(menu, MF_STRING, MENU_CONFIG_ID, PCWSTR(config_text.as_ptr()));
         let _ = AppendMenuW(menu, MF_STRING, MENU_EXIT_ID, PCWSTR(exit_text.as_ptr()));
         let mut cursor = POINT::default();
         if GetCursorPos(&mut cursor).is_ok() {
@@ -155,6 +169,160 @@ mod windows_app {
             let _ = TrackPopupMenu(menu, TPM_RIGHTBUTTON, cursor.x, cursor.y, 0, hwnd, None);
         }
         let _ = DestroyMenu(menu);
+    }
+
+    unsafe fn show_config_window() {
+        let instance = GetModuleHandleW(None).unwrap_or_default();
+        let class_name = to_wide("vnkey-config-window");
+        let title = to_wide("vnkey config");
+        let static_class = to_wide("STATIC");
+        let button_class = to_wide("BUTTON");
+        let lbl_method = to_wide("Input Method:");
+        let txt_telex = to_wide("Telex");
+        let txt_vni = to_wide("VNI");
+        let txt_close = to_wide("Dong");
+        let txt_exit = to_wide("Thoat");
+
+        let config_class = WNDCLASSW {
+            lpfnWndProc: Some(config_window_proc),
+            hInstance: HINSTANCE(instance.0),
+            lpszClassName: PCWSTR(class_name.as_ptr()),
+            ..Default::default()
+        };
+        let _ = RegisterClassW(&config_class);
+
+        let hwnd = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR(class_name.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            200,
+            200,
+            380,
+            230,
+            None,
+            None,
+            HINSTANCE(instance.0),
+            None,
+        );
+        if let Ok(hwnd) = hwnd {
+            let _ = CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                PCWSTR(static_class.as_ptr()),
+                PCWSTR(lbl_method.as_ptr()),
+                WS_CHILD | WS_VISIBLE,
+                24,
+                24,
+                140,
+                24,
+                hwnd,
+                None,
+                HINSTANCE(instance.0),
+                None,
+            );
+
+            let telex_btn = CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                PCWSTR(button_class.as_ptr()),
+                PCWSTR(txt_telex.as_ptr()),
+                WS_CHILD | WS_VISIBLE | WINDOW_STYLE(BS_AUTORADIOBUTTON as u32),
+                24,
+                54,
+                120,
+                24,
+                hwnd,
+                HMENU(ID_RADIO_TELEX as isize as _),
+                HINSTANCE(instance.0),
+                None,
+            )
+            .ok();
+            let vni_btn = CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                PCWSTR(button_class.as_ptr()),
+                PCWSTR(txt_vni.as_ptr()),
+                WS_CHILD | WS_VISIBLE | WINDOW_STYLE(BS_AUTORADIOBUTTON as u32),
+                160,
+                54,
+                120,
+                24,
+                hwnd,
+                HMENU(ID_RADIO_VNI as isize as _),
+                HINSTANCE(instance.0),
+                None,
+            )
+            .ok();
+
+            let _ = CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                PCWSTR(button_class.as_ptr()),
+                PCWSTR(txt_close.as_ptr()),
+                WS_CHILD | WS_VISIBLE,
+                24,
+                104,
+                100,
+                30,
+                hwnd,
+                HMENU(ID_BTN_CLOSE as isize as _),
+                HINSTANCE(instance.0),
+                None,
+            );
+            let _ = CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                PCWSTR(button_class.as_ptr()),
+                PCWSTR(txt_exit.as_ptr()),
+                WS_CHILD | WS_VISIBLE,
+                136,
+                104,
+                100,
+                30,
+                hwnd,
+                HMENU(ID_BTN_EXIT as isize as _),
+                HINSTANCE(instance.0),
+                None,
+            );
+
+            let method = STATE.lock().expect("state poisoned").active_method;
+            if let Some(telex_btn) = telex_btn {
+                let check = if method == InputMethod::Telex {
+                    1usize
+                } else {
+                    0usize
+                };
+                let _ = SendMessageW(telex_btn, BM_SETCHECK, WPARAM(check), LPARAM(0));
+            }
+            if let Some(vni_btn) = vni_btn {
+                let check = if method == InputMethod::Vni {
+                    1usize
+                } else {
+                    0usize
+                };
+                let _ = SendMessageW(vni_btn, BM_SETCHECK, WPARAM(check), LPARAM(0));
+            }
+        }
+    }
+
+    unsafe extern "system" fn config_window_proc(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        match msg {
+            WM_COMMAND => {
+                match (wparam.0 & 0xffff) as usize {
+                    ID_RADIO_TELEX => set_active_method(InputMethod::Telex),
+                    ID_RADIO_VNI => set_active_method(InputMethod::Vni),
+                    ID_BTN_CLOSE => {
+                        let _ = DestroyWindow(hwnd);
+                    }
+                    ID_BTN_EXIT => PostQuitMessage(0),
+                    _ => {}
+                }
+                LRESULT(0)
+            }
+            WM_DESTROY => LRESULT(0),
+            _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+        }
     }
 
     unsafe fn add_tray_icon(hwnd: HWND) -> bool {
@@ -216,6 +384,16 @@ mod windows_app {
             InputMethod::Vni => InputMethod::Telex,
         };
         let name = match state.active_method {
+            InputMethod::Telex => "Telex",
+            InputMethod::Vni => "VNI",
+        };
+        println!("Đổi kiểu gõ: {name}");
+    }
+
+    fn set_active_method(method: InputMethod) {
+        let mut state = STATE.lock().expect("state poisoned");
+        state.active_method = method;
+        let name = match method {
             InputMethod::Telex => "Telex",
             InputMethod::Vni => "VNI",
         };
